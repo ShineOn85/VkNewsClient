@@ -17,10 +17,10 @@ import kotlinx.coroutines.flow.stateIn
 import ru.absolutelee.vknewsclient.data.mapper.mapToComments
 import ru.absolutelee.vknewsclient.data.mapper.mapToListFeedPostEntity
 import ru.absolutelee.vknewsclient.data.network.ApiFactory
+import ru.absolutelee.vknewsclient.domain.entities.AuthState
 import ru.absolutelee.vknewsclient.domain.entities.FeedPost
 import ru.absolutelee.vknewsclient.domain.entities.StatisticItem
 import ru.absolutelee.vknewsclient.domain.entities.StatisticType
-import ru.absolutelee.vknewsclient.domain.entities.AuthState
 import ru.absolutelee.vknewsclient.domain.repository.NewsFeedRepository
 import ru.absolutelee.vknewsclient.presentation.mergeWith
 

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import ru.absolutelee.vknewsclient.data.repository.NewsFeedRepositoryImpl
 import ru.absolutelee.vknewsclient.domain.entities.FeedPost
+import ru.absolutelee.vknewsclient.domain.usecases.ChangeLikeStatusUseCase
 import ru.absolutelee.vknewsclient.domain.usecases.DeletePostUseCase
 import ru.absolutelee.vknewsclient.domain.usecases.GetRecommendedUseCase
 import ru.absolutelee.vknewsclient.domain.usecases.LoadNextRecommendedUseCase
@@ -27,6 +28,7 @@ class NewsFeedViewModel(application: Application) : AndroidViewModel(application
     private val getRecommended = GetRecommendedUseCase(repository)
     private val deletePost = DeletePostUseCase(repository)
     private val loadNextRecommendedPosts = LoadNextRecommendedUseCase(repository)
+    private val changePostLikeStatus = ChangeLikeStatusUseCase(repository)
 
     private val recommendedFlow = getRecommended()
 
@@ -58,7 +60,7 @@ class NewsFeedViewModel(application: Application) : AndroidViewModel(application
 
     fun changeLikeStatus(feedPost: FeedPost) {
         viewModelScope.launch(context = exceptionHandler) {
-            repository.changeLikeStatus(feedPost)
+            changePostLikeStatus(feedPost)
         }
     }
 
