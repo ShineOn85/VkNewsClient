@@ -50,6 +50,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.hilt.navigation.fragment)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.converter.gson.v2110)
     implementation(libs.logging.interceptor)
