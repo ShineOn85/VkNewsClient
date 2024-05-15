@@ -1,6 +1,5 @@
 package ru.absolutelee.vknewsclient.presentation.comments
 
-import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,12 +28,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import ru.absolutelee.vknewsclient.R
 import ru.absolutelee.vknewsclient.domain.entities.FeedPost
@@ -47,12 +45,11 @@ fun CommentsScreen(
     onBackPressed: () -> Unit
 ) {
 
-    val viewModel: CommentsViewModel = viewModel(
-        factory = CommentsVIewModelFactory(
-            feedPost = feedPost,
-            application = LocalContext.current.applicationContext as Application
-        )
-    )
+    val viewModel: CommentsViewModel =
+        hiltViewModel(creationCallback = { factory: CommentsViewModel.CommentsViewModelFactory ->
+            factory.create(feedPost)
+        })
+
 
     val state = viewModel.state.collectAsState(CommentsScreenState.Initial)
     val currentState = state.value
