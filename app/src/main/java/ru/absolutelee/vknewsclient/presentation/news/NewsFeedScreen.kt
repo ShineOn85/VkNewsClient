@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.absolutelee.vknewsclient.domain.entities.FeedPost
 import ru.absolutelee.vknewsclient.ui.theme.DarkBlue
@@ -29,7 +30,7 @@ import ru.absolutelee.vknewsclient.ui.theme.DarkBlue
 @Composable
 fun NewsFeedScreen(onCommentsClickListener: (FeedPost) -> Unit) {
 
-    val viewModel: NewsFeedViewModel = viewModel()
+    val viewModel: NewsFeedViewModel = hiltViewModel()
 
     val state = viewModel.state.collectAsState(NewsFeedScreenState.Initial)
 

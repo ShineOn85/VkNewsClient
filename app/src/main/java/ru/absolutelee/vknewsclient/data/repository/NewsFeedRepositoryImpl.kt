@@ -1,6 +1,5 @@
 package ru.absolutelee.vknewsclient.data.repository
 
-import android.app.Application
 import com.vk.api.sdk.VKPreferencesKeyValueStorage
 import com.vk.api.sdk.auth.VKAccessToken
 import kotlinx.coroutines.CoroutineScope
@@ -16,15 +15,24 @@ import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.flow.stateIn
 import ru.absolutelee.vknewsclient.data.mapper.mapToComments
 import ru.absolutelee.vknewsclient.data.mapper.mapToListFeedPostEntity
-import ru.absolutelee.vknewsclient.data.network.ApiFactory
+import ru.absolutelee.vknewsclient.data.network.ApiService
 import ru.absolutelee.vknewsclient.domain.entities.AuthState
 import ru.absolutelee.vknewsclient.domain.entities.FeedPost
 import ru.absolutelee.vknewsclient.domain.entities.StatisticItem
 import ru.absolutelee.vknewsclient.domain.entities.StatisticType
 import ru.absolutelee.vknewsclient.domain.repository.NewsFeedRepository
 import ru.absolutelee.vknewsclient.presentation.mergeWith
+import javax.inject.Inject
 
-class NewsFeedRepositoryImpl(application: Application) : NewsFeedRepository {
+class NewsFeedRepositoryImpl @Inject constructor(
+    private val apiService: ApiService,
+    private val storage: VKPreferencesKeyValueStorage,
+) : NewsFeedRepository {
+
+
+    private val token
+        get() = VKAccessToken.restore(storage) ?: throw IllegalStateException("Token is null")
+
 
     private val loadNextFeedPostsEvent = MutableSharedFlow<Unit>(replay = 1)
     private val loadRecommendedFlow = MutableSharedFlow<List<FeedPost>>()
@@ -62,17 +70,12 @@ class NewsFeedRepositoryImpl(application: Application) : NewsFeedRepository {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
-    private val storage = VKPreferencesKeyValueStorage(application)
-    private val token
-        get() = VKAccessToken.restore(storage) ?: throw IllegalStateException("Token is null")
-
-    private val apiService = ApiFactory.apiService
 
     private val checkAuthStateEvent = MutableSharedFlow<Unit>(replay = 1)
 
     override fun getAuthState() = flow {
         checkAuthStateEvent.emit(Unit)
-        checkAuthStateEvent.collect{
+        checkAuthStateEvent.collect {
             val loggedIn = token.isValid
             val authState = if (loggedIn) AuthState.Authorized else AuthState.Unauthorized
             emit(authState)
@@ -91,18 +94,18 @@ class NewsFeedRepositoryImpl(application: Application) : NewsFeedRepository {
 
     override fun getRecommended(): StateFlow<List<FeedPost>> =
         feedPostsFlow.mergeWith(loadRecommendedFlow)
-        .stateIn(
-            scope = coroutineScope,
-            started = SharingStarted.Lazily,
-            initialValue = newsFeed
-        )
+            .stateIn(
+                scope = coroutineScope,
+                started = SharingStarted.Lazily,
+                initialValue = newsFeed
+            )
 
 
     override suspend fun loadNextRecommended() {
         loadNextFeedPostsEvent.emit(Unit)
     }
 
-    override suspend fun checkAuthState(){
+    override suspend fun checkAuthState() {
         checkAuthStateEvent.emit(Unit)
     }
 
@@ -146,6 +149,7 @@ class NewsFeedRepositoryImpl(application: Application) : NewsFeedRepository {
                 itemId = feedPost.id
             )
         }
+
         val newCountLikes = response.likes.count
         val newStatistics = feedPost.statistics.toMutableList().apply {
             removeIf { it.type == StatisticType.LIKES }
@@ -157,5 +161,4 @@ class NewsFeedRepositoryImpl(application: Application) : NewsFeedRepository {
         _newsFeed[postIndex] = newPost
         loadRecommendedFlow.emit(newsFeed)
     }
-
 }
