@@ -8,7 +8,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.retry
@@ -18,6 +17,7 @@ import ru.absolutelee.vknewsclient.data.mapper.mapToListFeedPostEntity
 import ru.absolutelee.vknewsclient.data.network.ApiService
 import ru.absolutelee.vknewsclient.domain.entities.AuthState
 import ru.absolutelee.vknewsclient.domain.entities.FeedPost
+import ru.absolutelee.vknewsclient.domain.entities.NewsFeedResult
 import ru.absolutelee.vknewsclient.domain.entities.StatisticItem
 import ru.absolutelee.vknewsclient.domain.entities.StatisticType
 import ru.absolutelee.vknewsclient.domain.repository.NewsFeedRepository
@@ -31,41 +31,38 @@ class NewsFeedRepositoryImpl @Inject constructor(
 
 
     private val token
-        get() = VKAccessToken.restore(storage) ?: throw IllegalStateException("Token is null")
+        get() = VKAccessToken.restore(storage)
 
 
     private val loadNextFeedPostsEvent = MutableSharedFlow<Unit>(replay = 1)
-    private val loadRecommendedFlow = MutableSharedFlow<List<FeedPost>>()
-
-    private val _loadingErrorFlow = MutableSharedFlow<String>()
-    val loadingErrorFlow = _loadingErrorFlow.asSharedFlow()
+    private val loadRecommendedFlow = MutableSharedFlow<NewsFeedResult>()
 
 
-    private val feedPostsFlow = flow {
+    private val feedPostsFlow = flow<NewsFeedResult> {
         loadNextRecommended()
         loadNextFeedPostsEvent.collect {
             val startFrom = nextFrom
 
             if (startFrom == null && newsFeed.isNotEmpty()) {
-                emit(newsFeed)
+                emit(NewsFeedResult.Success(newsFeed))
                 return@collect
             }
 
             val response = if (startFrom == null) {
-                apiService.loadRecommended(token.accessToken)
+                apiService.loadRecommended(getAccessToken())
             } else {
-                apiService.loadRecommended(token.accessToken, startFrom)
+                apiService.loadRecommended(getAccessToken(), startFrom)
             }
             nextFrom = response.newsFeedContent.nextFrom
             val posts = response.mapToListFeedPostEntity()
             _newsFeed.addAll(posts)
-            emit(newsFeed)
+            emit(NewsFeedResult.Success(newsFeed))
         }
     }.retry(3) {
         delay(3000L)
         true
     }.catch {
-        _loadingErrorFlow.emit(it.message ?: "Что-то пошло не так")
+        emit(NewsFeedResult.Error(it.message ?: "Что-то пошло не так"))
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
@@ -76,7 +73,8 @@ class NewsFeedRepositoryImpl @Inject constructor(
     override fun getAuthState() = flow {
         checkAuthStateEvent.emit(Unit)
         checkAuthStateEvent.collect {
-            val loggedIn = token.isValid
+            val currentToken = token
+            val loggedIn = currentToken != null && currentToken.isValid
             val authState = if (loggedIn) AuthState.Authorized else AuthState.Unauthorized
             emit(authState)
         }
@@ -92,12 +90,12 @@ class NewsFeedRepositoryImpl @Inject constructor(
 
     private var nextFrom: String? = null
 
-    override fun getRecommended(): StateFlow<List<FeedPost>> =
+    override fun getRecommended(): StateFlow<NewsFeedResult> =
         feedPostsFlow.mergeWith(loadRecommendedFlow)
             .stateIn(
                 scope = coroutineScope,
                 started = SharingStarted.Lazily,
-                initialValue = newsFeed
+                initialValue = NewsFeedResult.Success(newsFeed)
             )
 
 
@@ -111,7 +109,7 @@ class NewsFeedRepositoryImpl @Inject constructor(
 
     override fun getComments(feedPost: FeedPost) = flow {
         val commentsDto = apiService.getComments(
-            token = token.accessToken,
+            token = getAccessToken(),
             ownerId = feedPost.ownerId,
             itemId = feedPost.id
         )
@@ -129,22 +127,22 @@ class NewsFeedRepositoryImpl @Inject constructor(
 
     override suspend fun deletePost(feedPost: FeedPost) {
         apiService.ignorePost(
-            token = token.accessToken,
+            token = getAccessToken(),
             ownerId = feedPost.ownerId,
             itemId = feedPost.id
         )
         _newsFeed.remove(feedPost)
-        loadRecommendedFlow.emit(newsFeed)
+        loadRecommendedFlow.emit(NewsFeedResult.Success(newsFeed))
     }
 
     override suspend fun changeLikeStatus(feedPost: FeedPost) {
         val response = if (feedPost.isLiked) apiService.deleteLike(
-            token = token.accessToken,
+            token = getAccessToken(),
             ownerId = feedPost.ownerId,
             itemId = feedPost.id
         ) else {
             apiService.addLike(
-                token = token.accessToken,
+                token = getAccessToken(),
                 ownerId = feedPost.ownerId,
                 itemId = feedPost.id
             )
@@ -159,6 +157,10 @@ class NewsFeedRepositoryImpl @Inject constructor(
         val postIndex = newsFeed.indexOf(feedPost)
 
         _newsFeed[postIndex] = newPost
-        loadRecommendedFlow.emit(newsFeed)
+        loadRecommendedFlow.emit(NewsFeedResult.Success(newsFeed))
+    }
+
+    private fun getAccessToken(): String{
+        return token?.accessToken ?: throw IllegalStateException("Token is null")
     }
 }
