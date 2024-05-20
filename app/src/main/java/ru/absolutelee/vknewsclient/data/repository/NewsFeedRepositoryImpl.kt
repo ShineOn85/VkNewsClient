@@ -24,19 +24,47 @@ import ru.absolutelee.vknewsclient.domain.repository.NewsFeedRepository
 import ru.absolutelee.vknewsclient.presentation.mergeWith
 import javax.inject.Inject
 
+
 class NewsFeedRepositoryImpl @Inject constructor(
     private val apiService: ApiService,
     private val storage: VKPreferencesKeyValueStorage,
 ) : NewsFeedRepository {
 
+    private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
     private val token
         get() = VKAccessToken.restore(storage)
+
+    private fun getAccessToken(): String{
+        return token?.accessToken ?: throw IllegalStateException("Token is null")
+    }
+
+    private val checkAuthStateEvent = MutableSharedFlow<Unit>(replay = 1)
+    private val authStateFlow = flow {
+        checkAuthState()
+        checkAuthStateEvent.collect {
+            val currentToken = token
+            val loggedIn = currentToken != null && currentToken.isValid
+            val authState = if (loggedIn) AuthState.Authorized else AuthState.Unauthorized
+            emit(authState)
+        }
+    }.stateIn(
+        scope = coroutineScope,
+        started = SharingStarted.Lazily,
+        initialValue = AuthState.Initial
+    )
+
+    override fun getAuthState(): StateFlow<AuthState> = authStateFlow
 
 
     private val loadNextFeedPostsEvent = MutableSharedFlow<Unit>(replay = 1)
     private val loadRecommendedFlow = MutableSharedFlow<NewsFeedResult>()
 
+    private val _newsFeed = mutableListOf<FeedPost>()
+    private val newsFeed: List<FeedPost>
+        get() = _newsFeed.toList()
+
+    private var nextFrom: String? = null
 
     private val feedPostsFlow = flow<NewsFeedResult> {
         loadNextRecommended()
@@ -65,30 +93,6 @@ class NewsFeedRepositoryImpl @Inject constructor(
         emit(NewsFeedResult.Error(it.message ?: "Что-то пошло не так"))
     }
 
-    private val coroutineScope = CoroutineScope(Dispatchers.Default)
-
-
-    private val checkAuthStateEvent = MutableSharedFlow<Unit>(replay = 1)
-
-    override fun getAuthState() = flow {
-        checkAuthStateEvent.emit(Unit)
-        checkAuthStateEvent.collect {
-            val currentToken = token
-            val loggedIn = currentToken != null && currentToken.isValid
-            val authState = if (loggedIn) AuthState.Authorized else AuthState.Unauthorized
-            emit(authState)
-        }
-    }.stateIn(
-        scope = coroutineScope,
-        started = SharingStarted.Lazily,
-        initialValue = AuthState.Initial
-    )
-
-    private val _newsFeed = mutableListOf<FeedPost>()
-    private val newsFeed: List<FeedPost>
-        get() = _newsFeed.toList()
-
-    private var nextFrom: String? = null
 
     override fun getRecommended(): StateFlow<NewsFeedResult> =
         feedPostsFlow.mergeWith(loadRecommendedFlow)
@@ -158,9 +162,5 @@ class NewsFeedRepositoryImpl @Inject constructor(
 
         _newsFeed[postIndex] = newPost
         loadRecommendedFlow.emit(NewsFeedResult.Success(newsFeed))
-    }
-
-    private fun getAccessToken(): String{
-        return token?.accessToken ?: throw IllegalStateException("Token is null")
     }
 }

@@ -16,16 +16,19 @@ import retrofit2.create
 import ru.absolutelee.vknewsclient.data.network.ApiService
 import ru.absolutelee.vknewsclient.data.repository.NewsFeedRepositoryImpl
 import ru.absolutelee.vknewsclient.domain.repository.NewsFeedRepository
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 interface DataModule {
 
     @Binds
+    @Singleton
     fun provideNewsFeedRepository(impl: NewsFeedRepositoryImpl): NewsFeedRepository
 
     companion object {
         @Provides
+        @Singleton
         fun provideApiService(): ApiService {
             val okHttpClient = OkHttpClient.Builder()
                 .addInterceptor(HttpLoggingInterceptor().apply {
@@ -42,6 +45,7 @@ interface DataModule {
         }
 
         @Provides
+        @Singleton
         fun provideVKPreferencesKeyValueStorage(@ApplicationContext context: Context): VKPreferencesKeyValueStorage {
             return VKPreferencesKeyValueStorage(context)
         }
